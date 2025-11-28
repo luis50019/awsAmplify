@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// src/App.tsx
+import React, { useEffect, useState, type JSX } from "react";
 import {
   Authenticator,
   Button,
@@ -13,39 +14,72 @@ import {
 import { Amplify } from "aws-amplify";
 import "@aws-amplify/ui-react/styles.css";
 import { generateClient } from "aws-amplify/data";
+import type { Schema } from "../amplify/data/resource";
 import outputs from "../amplify_outputs.json";
 
-/**
- * @type {import('aws-amplify/data').Client<import('../amplify/data/resource').Schema>}
- */
 Amplify.configure(outputs);
-import type { Schema } from "../amplify/data/resource";
 
 const client = generateClient<Schema>();
-//const client = generateClient({ authMode: "userPool" });
-export default function App() {
-  const [expenses, setExpenses] = useState<Schema["Expense"][]>([]);
+
+export default function App(): JSX.Element {
+  // Usamos any[] para evitar fricciones con los tipos ClientModel generados por Amplify.
+  const [expenses, setExpenses] = useState<any[]>([]);
+
   useEffect(() => {
-    client.models.Expense.observeQuery().subscribe({
-      next: (data) => setExpenses([...data.items]),
+    const sub = client.models.Expense.observeQuery().subscribe({
+      next: (data: any) => {
+        // cast a any[] — en tiempo de ejecución items contiene los objetos esperados
+        setExpenses([...((data.items as any[]) || [])]);
+      },
+      error: (err: any) => {
+        console.error("observeQuery error:", err);
+      },
     });
+
+    return () => {
+      try {
+        sub.unsubscribe();
+      } catch {
+        // ignore
+      }
+    };
   }, []);
-  async function createExpense(event) {
+
+  // Anotar el tipo del evento
+  async function createExpense(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.target);
+    const form = new FormData(event.currentTarget);
+
+    const nameValue = form.get("name");
+    const amountValue = form.get("amount");
+
+    const name = typeof nameValue === "string" ? nameValue : String(nameValue ?? "");
+    const amount =
+      amountValue == null
+        ? undefined
+        : typeof amountValue === "string"
+        ? parseFloat(amountValue)
+        : typeof amountValue === "number"
+        ? amountValue
+        : undefined;
+
     await client.models.Expense.create({
-      name: form.get("name"),
-      amount: form.get("amount"),
+      name,
+      amount,
     });
-    event.target.reset();
+
+    event.currentTarget.reset();
   }
-  async function deleteExpense({ id }) {
-    const toBeDeletedExpense = { id };
-    await client.models.Expense.delete(toBeDeletedExpense);
+
+  // Recibe id explícito
+  async function deleteExpense(id: string) {
+    if (!id) return;
+    await client.models.Expense.delete({ id });
   }
+
   return (
     <Authenticator>
-      {({ signOut }) => (
+      {({ signOut }: any) => (
         <Flex
           className="App"
           justifyContent="center"
@@ -55,13 +89,9 @@ export default function App() {
           margin="0 auto"
         >
           <Heading level={1}>Expense Tracker</Heading>
+
           <View as="form" margin="3rem 0" onSubmit={createExpense}>
-            <Flex
-              direction="column"
-              justifyContent="center"
-              gap="2rem"
-              padding="2rem"
-            >
+            <Flex direction="column" gap="2rem" padding="2rem">
               <TextField
                 name="name"
                 placeholder="Expense Name"
@@ -70,22 +100,28 @@ export default function App() {
                 variation="quiet"
                 required
               />
+
               <TextField
                 name="amount"
                 placeholder="Expense Amount"
                 label="Expense Amount"
-                type="float"
+                type="number"
+                step="0.01"
                 labelHidden
                 variation="quiet"
                 required
               />
+
               <Button type="submit" variation="primary">
                 Create Expense
               </Button>
             </Flex>
           </View>
+
           <Divider />
+
           <Heading level={2}>Expenses</Heading>
+
           <Grid
             margin="3rem 0"
             autoFlow="column"
@@ -93,32 +129,33 @@ export default function App() {
             gap="2rem"
             alignContent="center"
           >
-            {expenses.map((expense) => (
+            {expenses.map((expense: any) => (
               <Flex
-                key={expense.id || expense.name}
+                key={expense?.id ?? expense?.name}
                 direction="column"
                 justifyContent="center"
                 alignItems="center"
-                gap="2rem"
+                gap="1rem"
                 border="1px solid #ccc"
                 padding="2rem"
-                borderRadius="5%"
+                borderRadius="10px"
                 className="box"
               >
-                <View>
-                  <Heading level={3}>{expense.name}</Heading>
-                </View>
-                <Text fontStyle="italic">${expense.amount}</Text>
+                <Heading level={3}>{expense?.name}</Heading>
+
+                <Text fontStyle="italic">${expense?.amount}</Text>
+
                 <Button
                   variation="destructive"
-                  onClick={() => deleteExpense(expense)}
+                  onClick={() => deleteExpense(expense?.id)}
                 >
-                  Delete note
+                  Delete Expense
                 </Button>
               </Flex>
             ))}
           </Grid>
-          <Button onClick={signOut}>Sign Out</Button>
+
+          <Button onClick={() => signOut()}>Sign Out</Button>
         </Flex>
       )}
     </Authenticator>
