@@ -8,8 +8,7 @@ import {
   Heading,
   Flex,
   View,
-  Grid,
-  Divider,
+  Card,
 } from "@aws-amplify/ui-react";
 import { Amplify } from "aws-amplify";
 import "@aws-amplify/ui-react/styles.css";
@@ -22,56 +21,33 @@ Amplify.configure(outputs);
 const client = generateClient<Schema>();
 
 export default function App(): JSX.Element {
-  // Usamos any[] para evitar fricciones con los tipos ClientModel generados por Amplify.
   const [expenses, setExpenses] = useState<any[]>([]);
 
   useEffect(() => {
     const sub = client.models.Expense.observeQuery().subscribe({
-      next: (data: any) => {
-        // cast a any[] — en tiempo de ejecución items contiene los objetos esperados
-        setExpenses([...((data.items as any[]) || [])]);
-      },
-      error: (err: any) => {
-        console.error("observeQuery error:", err);
-      },
+      next: (data: any) => setExpenses([...(data.items as any[])]),
+      error: (err: any) => console.error("observeQuery error:", err),
     });
 
     return () => {
       try {
         sub.unsubscribe();
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
   }, []);
 
-  // Anotar el tipo del evento
   async function createExpense(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
 
-    const nameValue = form.get("name");
-    const amountValue = form.get("amount");
+    const name = String(form.get("name") ?? "");
+    const amountRaw = form.get("amount");
+    const amount = typeof amountRaw === "string" ? parseFloat(amountRaw) : undefined;
 
-    const name = typeof nameValue === "string" ? nameValue : String(nameValue ?? "");
-    const amount =
-      amountValue == null
-        ? undefined
-        : typeof amountValue === "string"
-        ? parseFloat(amountValue)
-        : typeof amountValue === "number"
-        ? amountValue
-        : undefined;
-
-    await client.models.Expense.create({
-      name,
-      amount,
-    });
-
+    await client.models.Expense.create({ name, amount });
     event.currentTarget.reset();
   }
 
-  // Recibe id explícito
   async function deleteExpense(id: string) {
     if (!id) return;
     await client.models.Expense.delete({ id });
@@ -81,81 +57,132 @@ export default function App(): JSX.Element {
     <Authenticator>
       {({ signOut }: any) => (
         <Flex
-          className="App"
-          justifyContent="center"
-          alignItems="center"
-          direction="column"
-          width="70%"
-          margin="0 auto"
+          height="100vh"
+          style={{
+            background: "linear-gradient(135deg, #0f172a, #1e293b)",
+            color: "#fff",
+          }}
         >
-          <Heading level={1}>Expense Tracker</Heading>
 
-          <View as="form" margin="3rem 0" onSubmit={createExpense}>
-            <Flex direction="column" gap="2rem" padding="2rem">
-              <TextField
-                name="name"
-                placeholder="Expense Name"
-                label="Expense Name"
-                labelHidden
-                variation="quiet"
-                required
-              />
-
-              <TextField
-                name="amount"
-                placeholder="Expense Amount"
-                label="Expense Amount"
-                type="number"
-                step="0.01"
-                labelHidden
-                variation="quiet"
-                required
-              />
-
-              <Button type="submit" variation="primary">
-                Create Expense
-              </Button>
-            </Flex>
-          </View>
-
-          <Divider />
-
-          <Heading level={2}>Expenses</Heading>
-
-          <Grid
-            margin="3rem 0"
-            autoFlow="column"
-            justifyContent="center"
-            gap="2rem"
-            alignContent="center"
+          {/* LOGOUT ARRIBA A LA DERECHA */}
+          <Button
+            onClick={signOut}
+            style={{
+              position: "absolute",
+              top: "20px",
+              right: "20px",
+              background: "#F00",
+              padding: "0.7rem 1.5rem",
+              color: "white",
+              borderRadius: "8px",
+            }}
           >
-            {expenses.map((expense: any) => (
-              <Flex
-                key={expense?.id ?? expense?.name}
-                direction="column"
-                justifyContent="center"
-                alignItems="center"
-                gap="1rem"
-                border="1px solid #ccc"
-                padding="2rem"
-                borderRadius="10px"
-                className="box"
-              >
-                <Heading level={3}>{expense?.name}</Heading>
+            Logout
+          </Button>
 
-                <Text fontStyle="italic">${expense?.amount}</Text>
+          {/* CONTENEDOR PRINCIPAL */}
+          <Flex
+            width="100%"
+            height="100%"
+            justifyContent="center"
+            alignItems="center"
+            gap="3rem"
+            padding="2rem"
+          >
 
-                <Button
-                  variation="destructive"
-                  onClick={() => deleteExpense(expense?.id)}
-                >
-                  Delete Expense
-                </Button>
+            {/* MODAL IZQUIERDO */}
+            <Card
+              padding="2rem"
+              width="350px"
+              style={{
+                backgroundColor: "#1e293b",
+                borderRadius: "12px",
+                boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+                border: "1px solid #334155",
+              }}
+            >
+              <Heading level={3} marginBottom="1rem" color="#f1f5f9">
+                Nuevo Gasto
+              </Heading>
+
+              <View as="form" onSubmit={createExpense}>
+                <Flex direction="column" gap="1.2rem">
+                  <TextField
+                    name="name"
+                    placeholder="Nombre del gasto"
+                    labelHidden
+                    style={{ background: "#0f172a", color: "white" }}
+                  />
+                  <TextField
+                    name="amount"
+                    placeholder="0.00"
+                    type="number"
+                    step="0.01"
+                    labelHidden
+                    style={{ background: "#0f172a", color: "white" }}
+                  />
+                  <Button
+                    type="submit"
+                    style={{
+                      background: "#3b82f6",
+                      borderRadius: "8px",
+                      padding: "0.8rem",
+                    }}
+                  >
+                    Guardar
+                  </Button>
+                </Flex>
+              </View>
+            </Card>
+
+            {/* LISTA DE NOTAS A LA DERECHA */}
+            <Flex
+              width="50%"
+              height="80vh"
+              direction="column"
+              overflow="auto"
+              padding="1rem"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                borderRadius: "12px",
+                border: "1px solid #475569",
+              }}
+            >
+              <Heading level={3} style={{color:"white"}} textAlign="center" marginBottom="1rem">
+                Gastos Registrados
+              </Heading>
+
+              <Flex direction="column" gap="1rem">
+                {expenses.map((expense: any) => (
+                  <Card
+                    key={expense.id}
+                    padding="1rem"
+                    style={{
+                      background: "#334155",
+                      borderRadius: "10px",
+                      border: "1px solid #475569",
+                    }}
+                  >
+                    <Heading level={4}>{expense.name}</Heading>
+                    <Text marginTop="0.3rem">${expense.amount}</Text>
+
+                    <Button
+                      variation="destructive"
+                      marginTop="0.8rem"
+                      onClick={() => deleteExpense(expense.id)}
+                      style={{
+                        background: "#F00",
+                        color: "white",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  </Card>
+                ))}
               </Flex>
-            ))}
-          </Grid>
-
-          <Button onClick={() => signOut()}>Sign Out</Button>
+            </Flex>
+          </Flex>
         </Flex>
       )}
     </Authenticator>
