@@ -19,10 +19,12 @@ import outputs from "../amplify_outputs.json";
  * @type {import('aws-amplify/data').Client<import('../amplify/data/resource').Schema>}
  */
 Amplify.configure(outputs);
+import type { Schema } from "../amplify/data/resource";
 
-const client = generateClient({ authMode: "userPool" });
+const client = generateClient<Schema>();
+//const client = generateClient({ authMode: "userPool" });
 export default function App() {
-  const [expenses, setExpenses] = useState([]);
+  const [expenses, setExpenses] = useState<Schema["Expense"][]>([]);
   useEffect(() => {
     client.models.Expense.observeQuery().subscribe({
       next: (data) => setExpenses([...data.items]),
@@ -104,7 +106,7 @@ export default function App() {
                 className="box"
               >
                 <View>
-                  <Heading level="3">{expense.name}</Heading>
+                  <Heading level={3}>{expense.name}</Heading>
                 </View>
                 <Text fontStyle="italic">${expense.amount}</Text>
                 <Button
